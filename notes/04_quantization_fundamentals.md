@@ -132,6 +132,8 @@ b : bit-width
 
 结合 note 03 的结论：**端侧 decode 是带宽墙，所以 W4A16 收益最大；prefill 是算力墙，W4A16 帮不上，需要 W8A8 或 fp16。** 这就是为什么端侧方案常写成 "W4A16 + prefill 用 fp16"。
 
+对于LLM来说，Activation不是ReLU/SiLU, 而是所有运行过程中产生的中间结果，比如Q = Wq, Q是activation，  Q如果要量化，比如16Bit，就是A16；kV Cache也是Activation。
+
 ### 3.4 格式谱系
 
 `int8 / int4(nibble) / fp8(E4M3,E5M2) / mxfp4 / nvfp4`。
@@ -471,6 +473,7 @@ y = W x = (W R)(Rᵀ x)
 - 如果对 `γ` 做 per-channel 量化：每个通道有自己的 scale → 每个通道的量化噪声**不同** → 归一化之后，这个"不均匀噪声"被隐式地再归一化了一次 → **残差流的通道间失衡**。
 - 后果是**逐层累积**的：residual imbalance → layer-to-layer drift → 深度越深越糟。
 
+
 所以：**Norm 的 weight 用 per-tensor（+ 非对称，因为 γ≈1）**。
 
 **这是本笔记最值得记的一条工程直觉：per-channel 不是"更细就一定更好"。** 粒度要匹配层的语义 ——
@@ -609,6 +612,11 @@ y = W x = (W R)(Rᵀ x)
 **我自己的经验顺序**（按性价比）：
 `KV 精度 > 敏感层混合精度 > 校准方法 > 旋转 > AdaRound/SeqMSE > QAT`。
 
+
+---
+## 笔记
+Weight量化可以减少decode阶段的参数搬运，提高AI；触发native W4 kernel，更高效的kernel
+Activation量化也是一样，在Prefill阶段用更高效的kernel可以有效缓解compute bound，Qwen2.5 3B AR128 W4A* perf +25%，主要来自MLP COnv/Linear，但也会带来额外的conversion overhead。 
 ---
 
 ## 10. 面试问答（17 题）
